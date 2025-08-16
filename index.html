@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Freekshot Scoreboard — Live Preview + Lineup</title>
+<style>
+  :root{--accent:#3bd6ff; --c1:#e35a5a; --c2:#3bd6ff}
+  html,body{margin:0;padding:0;background:transparent;color:#e9f1ff;font-family:Segoe UI,Roboto,Helvetica,Arial,Apple SD Gothic Neo,Noto Sans KR,sans-serif;height:100%}
+  .wrap{position:fixed;top:0;left:50%;transform:translateX(-50%);transform-origin:top center;z-index:9999;pointer-events:none}
+
+  /* Board */
+  .board{min-width:520px;max-width:960px;pointer-events:auto;position:relative;padding:10px 16px;border-radius:20px;display:flex;flex-direction:column;align-items:center}
+  .board.sc1{background:linear-gradient(180deg,rgba(0,0,0,.72),rgba(0,0,0,.46));border:1px solid rgba(59,214,255,.35);box-shadow:inset 0 0 0 1px rgba(59,214,255,.12),0 8px 22px rgba(0,0,0,.35);backdrop-filter:saturate(120%) blur(2px)}
+  .board.sc1:before,.board.sc1:after{content:"";position:absolute;height:3px;left:12px;right:12px;background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:.9;pointer-events:none}
+  .board.sc1:before{top:4px}.board.sc1:after{bottom:4px}
+  .wing{position:absolute;top:6px;bottom:6px;width:10px;pointer-events:none;filter:drop-shadow(0 2px 8px rgba(0,0,0,.6))}
+  .wing.left{left:-8px;clip-path:polygon(0 0,100% 8px,100% calc(100% - 8px),0 100%);background:linear-gradient(180deg,color-mix(in srgb,var(--c1) 85%,transparent),color-mix(in srgb,var(--c1) 35%,transparent))}
+  .wing.right{right:-8px;clip-path:polygon(100% 0,0 8px,0 calc(100% - 8px),100% 100%);background:linear-gradient(180deg,color-mix(in srgb,var(--c2) 85%,transparent),color-mix(in srgb,var(--c2) 35%,transparent))}
+
+  /* Title */
+  .title{font-size:12px;letter-spacing:.12em;color:#a9bfd6;text-transform:uppercase;margin:0 0 6px;display:flex;align-items:center;justify-content:center;gap:8px}
+  .title .pill{border:1px solid rgba(59,214,255,.45); padding:4px 10px; border-radius:999px; color:#cfe9ff; font-weight:900; background:linear-gradient(180deg,rgba(59,214,255,.20),rgba(59,214,255,.06)); font-size:25px; box-shadow:inset 0 0 14px rgba(59,214,255,.42)}
+  .title .pill.series-glow--soft{ text-shadow:0 0 4px rgba(59,214,255,.55),0 0 10px rgba(59,214,255,.28)}
+  .title .pill.series-glow--medium{ text-shadow:0 0 6px rgba(59,214,255,.75),0 0 16px rgba(59,214,255,.38)}
+  .title .pill.series-glow--strong{ text-shadow:0 0 8px rgba(59,214,255,.9),0 0 22px rgba(59,214,255,.5)}
+  .title .pill.series-glow--neon{ text-shadow:0 0 10px rgba(59,214,255,1),0 0 28px rgba(59,214,255,.8),0 0 42px rgba(59,214,255,.55)}
+
+  /* Score line */
+  .score{display:flex;align-items:center;justify-content:center;gap:10px}
+  .teambox{display:flex;flex-direction:column;align-items:center;gap:8px}
+  .logo{width:56px;height:56px;border:1px solid rgba(0,214,255,.45);border-radius:10px;background:#0b0e12;position:relative;overflow:hidden;box-shadow:inset 0 0 10px rgba(59,214,255,.15)}
+  .logo img{width:100%;height:100%;object-fit:contain;display:block}
+  .team{font-size:26px;font-weight:900;white-space:nowrap;text-align:center;text-shadow:0 0 6px rgba(0,214,255,.25)}
+  .race{display:inline-flex;align-items:center;justify-content:center;font-size:24px;padding:3px 12px;border:1px solid currentColor;border-radius:12px;font-weight:900;line-height:1.1}
+  .num{font-size:24px;font-weight:900;min-width:28px;text-align:center;background:linear-gradient(180deg,rgba(0,214,255,.18),rgba(0,214,255,.04));border:1px solid rgba(0,214,255,.38);padding:3px 10px;border-radius:7px;box-shadow:inset 0 0 10px rgba(0,214,255,.25),0 2px 10px rgba(0,0,0,.35)}
+  .vs{font-size:12px;font-weight:900;color:#cde9ff;letter-spacing:.25em;padding:2px 10px;position:relative}
+  .vs:before{content:"";position:absolute;inset:0;border:1px solid rgba(59,214,255,.35);border-radius:6px;clip-path:polygon(8% 0,92% 0,100% 50%,92% 100%,8% 100%,0 50%);background:linear-gradient(180deg,rgba(59,214,255,.08),rgba(59,214,255,.02))}
+  .dots{display:flex;gap:4px;margin-top:4px}
+  .dot{width:6px;height:6px;border:1px solid rgba(0,214,255,.45);border-radius:1px;background:rgba(0,214,255,.08)}
+  .dot.on{background:rgba(0,214,255,.9)}
+
+  /* Control panel */
+  .fab{position:fixed;right:14px;top:14px;z-index:2147483650;width:36px;height:36px;border-radius:999px;background:var(--accent);color:#001812;font-weight:900;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.4)}
+  .panel{position:fixed;right:14px;top:14px;z-index:2147483647;background:rgba(12,16,21,.9);border:1px solid rgba(255,255,255,.12);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.45);backdrop-filter:blur(6px);padding:14px;min-width:640px;color:#eaf2ff;pointer-events:auto;max-height:calc(100vh - 28px);overflow:auto;overscroll-behavior:contain;resize:both}
+  .panel h3{margin:0 0 10px;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:#a9bfd6;background:rgba(12,16,21,.95);position:sticky;top:0;padding:6px 88px 6px 0;z-index:10;display:flex;align-items:center;justify-content:center}
+  .panel .xbtn{position:absolute;top:50%;transform:translateY(-50%);right:12px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:1px solid #263244;border-radius:8px;background:#0c1015;color:#eaf2ff;cursor:pointer;z-index:6}
+  .panel .xbtn:hover{border-color:var(--accent)}
+  .row{display:grid;grid-template-columns:160px 1fr;gap:8px;align-items:center;margin:6px 0}
+  .panel input,.panel select{background:#0c1015;border:1px solid #263244;color:#eaf2ff;padding:8px 10px;border-radius:10px;font-size:13px}
+  .seg{display:flex;gap:6px;flex-wrap:wrap}
+  .btn{background:#0c1015;border:1px solid #263244;color:#eaf2ff;padding:6px 10px;border-radius:10px;cursor:pointer}
+  .btn.primary{background:var(--accent);border:none;color:#001812;font-weight:800}
+  .miniBtn{border:1px solid rgba(255,255,255,.16);background:#0c1015;color:#eaf2ff;padding:4px 8px;border-radius:8px;cursor:pointer;font-size:12px}
+  .miniBtn.active{background:var(--accent);color:#001812;border-color:transparent}
+
+  /* Lineup UI */
+  .lineup{border:1px solid #263244;border-radius:10px;background:#0b0f15;max-height:260px;overflow:auto;padding:6px}
+  .lu-row{display:grid;grid-template-columns:28px 1fr 24px 1fr auto auto;gap:6px;align-items:center;padding:4px;border-bottom:1px solid rgba(255,255,255,.06)}
+  .lu-row:last-child{border-bottom:none}
+  .sl{text-align:center;opacity:.75}
+  .vs-mini{text-align:center;opacity:.7}
+
+  .hide{display:none!important}
+.btn.danger{border:1px solid #5a1f27;background:#1a0b0e;color:#ffd6dc}
+.seg-toggle{gap:10px;flex-wrap:nowrap}
+.seg-toggle .tog{display:inline-flex;gap:6px}
+.chip{min-width:36px;height:32px;border:1px solid #263244;border-radius:8px;background:#0c1015;color:#9fb3c6;font-weight:900;cursor:pointer;padding:0 10px}
+.chip.active{box-shadow:0 0 12px rgba(0,0,0,.35) inset}
+.chip[data-race="T"].active{background:#0779b3;color:#001812;border-color:#0779b3}
+.chip[data-race="P"].active{background:#e8cd04;color:#1b1b10;border-color:#e8cd04}
+.chip[data-race="Z"].active{background:#622884;color:#f2e8ff;border-color:#622884}
+.nameRow{display:flex;align-items:center;gap:8px}.teambox .race{margin-left:2px}
+.topbar{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px}
+.scoreline{width:100%;display:flex;align-items:center;justify-content:center;gap:12px}
+.setsline{width:100%;display:flex;align-items:center;justify-content:space-between;margin-top:4px}
+.raceOverlay{position:absolute;top:0;bottom:0;width:40%;opacity:var(--ov,0.12);filter:var(--ovFilter, none);mix-blend-mode:var(--ovBlend, normal);pointer-events:none;background-position:center;background-size:85% auto;background-repeat:no-repeat;z-index:1}
+.raceOverlay.left{left:-4px}
+.raceOverlay.right{right:-4px;transform:scaleX(-1)}
+.board>.topbar,.board>.scoreline,.board>.setsline{position:relative;z-index:3}
+.wing{z-index:2}
+.raceIcon{width:20px;height:20px;display:inline-block;background:center/contain no-repeat;filter:drop-shadow(0 0 4px rgba(0,0,0,.5));margin-left:4px;opacity:.95}
+.raceIcon.hide{display:none!important}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="board sc1" id="board">
+      <i class="wing left" aria-hidden="true"></i>
+      <i class="wing right" aria-hidden="true"></i>
+      <div class="raceOverlay left" id="ovL" aria-hidden="true"></div>
+      <div class="raceOverlay right" id="ovR" aria-hidden="true"></div>
+      <div class="topbar">
+        <div class="logo" id="logo1"><img id="logo1Img" alt="logo1"></div>
+        <div class="title"><span class="pill series-glow--strong" id="series">Bo5</span></div>
+        <div class="logo" id="logo2"><img id="logo2Img" alt="logo2"></div>
+      </div>
+      <div class="scoreline">
+        <div class="nameRow left"><div class="team" id="t1">Team A</div><span class="race" id="race1">T</span><span class="raceIcon hide" id="ri1"></span></div>
+        <div class="num" id="s1">0</div>
+        <div class="vs">VS</div>
+        <div class="num" id="s2">0</div>
+        <div class="nameRow right"><div class="team" id="t2">Team B</div><span class="race" id="race2">P</span><span class="raceIcon hide" id="ri2"></span></div>
+      </div>
+      <div class="setsline">
+        <div class="dots" id="dotsL"></div>
+        <div class="dots" id="dotsR"></div>
+      </div>
+    </div>
+  </div>
+
+  <button class="fab" id="gear" title="설정 열기/닫기">⚙</button>
+
+<script>
+(function(){
+  const $=id=>document.getElementById(id);
+  const board=$('board');
+  const wrap=document.querySelector('.wrap');
+  const qs=new URLSearchParams(location.search);
+  // real-time sync queue (assigned later)
+  let queueSync = ()=>{};
+
+  /* Theme */
+  const THEMES={terran:'#ffcc66',protoss:'#3bd6ff',zerg:'#b36cff'};
+  document.documentElement.style.setProperty('--accent', THEMES[qs.get('theme')||'protoss']||THEMES.protoss);
+
+  /* Query options */
+  const style=(qs.get('style')||'sc1'); const alpha=parseFloat(qs.get('alpha')||'0.28');
+  const w=qs.get('w'); const y=qs.get('y'); const scale=parseFloat(qs.get('scale')||'1');
+  if(w){ board.style.minWidth='unset'; board.style.maxWidth='unset'; board.style.width=/vw|%|px$/.test(w)?w:`${w}px`; }
+  if(y){ wrap.style.top=/vh|%|px$/.test(y)?y:`${y}px`; }
+  if(!isNaN(scale)&&scale!==1){ wrap.style.transform=`translateX(-50%) scale(${scale})`; }
+
+  function applyStyle(mode){
+    board.classList.remove('sc1');
+    if(mode==='clear'){
+      Object.assign(board.style,{background:'transparent',border:'none',boxShadow:'none',backdropFilter:'none'});
+    }else if(mode==='solid'){
+      Object.assign(board.style,{background:'rgba(0,0,0,'+(isNaN(alpha)?0.6:alpha)+')',border:'1px solid rgba(255,255,255,.18)',backdropFilter:'none'});
+    }else if(mode==='glass'){
+      Object.assign(board.style,{background:'rgba(0,0,0,'+(isNaN(alpha)?0.28:alpha)+')',border:'1px solid rgba(255,255,255,.15)',backdropFilter:'saturate(140%) blur(6px)'});
+    }else{
+      board.removeAttribute('style'); board.classList.add('sc1');
+      board.style.setProperty('--c1', getComputedStyle(board).getPropertyValue('--c1').trim()||'#e35a5a');
+      board.style.setProperty('--c2', getComputedStyle(board).getPropertyValue('--c2').trim()||'#3bd6ff');
+      if(w){ board.style.minWidth='unset'; board.style.maxWidth='unset'; board.style.width=/vw|%|px$/.test(w)?w:`${w}px`; }
+    }
+  }
+  applyStyle(style);
+
+  /* Race + SP */
+  const RACE_COLORS={T:'#0779b3',P:'#e8cd04',Z:'#622884'};
+  $('race1').dataset.race=(($('race1').textContent||'T').trim().charAt(0)||'T').toUpperCase();
+  $('race2').dataset.race=(($('race2').textContent||'P').trim().charAt(0)||'P').toUpperCase();
+  function applyRaceColors(){ $('race1').style.color=RACE_COLORS[$('race1').dataset.race]||'#9fb2c8'; $('race2').style.color=RACE_COLORS[$('race2').dataset.race]||'#9fb2c8'; }
+  function renderRaceWithSp(spL, spR){ const r1=$('race1').dataset.race||'T'; const r2=$('race2').dataset.race||'P'; $('race1').textContent=r1+(spL?String(spL):''); $('race2').textContent=r2+(spR?String(spR):''); applyRaceColors(); }
+  const currentSP = { l: (qs.get('spL')||''), r: (qs.get('spR')||'') };
+  renderRaceWithSp(currentSP.l, currentSP.r);
+
+  /* Series pill */
+  const sg=(qs.get('sg')||'strong');
+  $('series').textContent = qs.get('series') || 'Bo5';
+  (function(){ const el=$('series'); el.classList.remove('series-glow--soft','series-glow--medium','series-glow--strong','series-glow--neon'); el.classList.add('series-glow--'+sg); })();
+
+  /* Sets (L/R) */
+  function normalizeSets(s){ if(!s) return []; return s.toUpperCase().replace(/\s+/g,'').split('').map(ch=>ch==='L'||ch==='1'?'L':(ch==='R'||ch==='2'?'R':null)).filter(Boolean); }
+  function renderDualSets(s){ const left=$('dotsL'), right=$('dotsR'); left.innerHTML=''; right.innerHTML=''; normalizeSets(s).forEach(ch=>{ const dl=document.createElement('div'); dl.className='dot'+(ch==='L'?' on':''); left.appendChild(dl); const dr=document.createElement('div'); dr.className='dot'+(ch==='R'?' on':''); right.appendChild(dr); }); }
+  if(qs.get('sets')) renderDualSets(qs.get('sets'));
+
+  // Race overlay + icons updater
+  function applyOverlayStyle(){
+    const mode = (OVERLAYS && OVERLAYS.mode) || 'color';
+    let blend='normal', filter='none';
+    if(mode==='screen-mono'){ blend='screen'; filter='grayscale(1) brightness(1.15)'; }
+    else if(mode==='screen-color'){ blend='screen'; filter='brightness(1.1)'; }
+    board.style.setProperty('--ovBlend', blend);
+    board.style.setProperty('--ovFilter', filter);
+  }
+  function updateRaceOverlays(){
+    const r1=$('race1').dataset.race||'T';
+    const r2=$('race2').dataset.race||'P';
+    const ovL=$('ovL'), ovR=$('ovR');
+    const u1=OVERLAYS[r1]||''; const u2=OVERLAYS[r2]||'';
+    ovL.style.backgroundImage = u1?`url('${u1}')`:'none';
+    ovR.style.backgroundImage = u2?`url('${u2}')`:'none';
+    board.style.setProperty('--ov', (typeof OVERLAYS.opacity==='number'?OVERLAYS.opacity:0.12));
+  }
+  function updateRaceIcons(){
+    const r1=$('race1').dataset.race||'T';
+    const r2=$('race2').dataset.race||'P';
+    const i1=$('ri1'), i2=$('ri2');
+    const u1=(typeof ICONS!=='undefined' && ICONS && ICONS[r1])?ICONS[r1]:'';
+    const u2=(typeof ICONS!=='undefined' && ICONS && ICONS[r2])?ICONS[r2]:'';
+    if(i1){ if(u1){ i1.style.backgroundImage=`url('${u1}')`; i1.classList.remove('hide'); } else { i1.style.backgroundImage=''; i1.classList.add('hide'); } }
+    if(i2){ if(u2){ i2.style.backgroundImage=`url('${u2}')`; i2.classList.remove('hide'); } else { i2.style.backgroundImage=''; i2.classList.add('hide'); } }
+  }
+  /* Data store */
+  const LINEUP_KEY='fs_lineup_v2';
+  const RHOME_KEY='fs_roster_home_v2';
+  const RAWAY_KEY='fs_roster_away_v2';
+  const ACTIVE_KEY='fs_active_slot_v2';
+  const OV_KEY='fs_overlay_urls_v1';
+  const ICON_KEY='fs_race_icons_v1';
+  const SNAP_KEY='fs_snapshots_v1';
+  function loadJSON(key, def){ try{ const t=localStorage.getItem(key); if(t) return JSON.parse(t); }catch(e){} return def; }
+  function saveJSON(key, val){ try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){} }
+
+  let RHOME = loadJSON(RHOME_KEY, []);
+  let RAWAY = loadJSON(RAWAY_KEY, []);
+  let LINEUP = loadJSON(LINEUP_KEY, Array.from({length:9},()=>({h:'',a:'',spL:'',spR:''})));
+  let ACTIVE = parseInt(localStorage.getItem(ACTIVE_KEY)||'1',10); if(!(ACTIVE>=1&&ACTIVE<=9)) ACTIVE=1;
+  let OVERLAYS = loadJSON(OV_KEY, {T:'',P:'',Z:'',opacity:0.12, mode:'color'}); if(!(ACTIVE>=1&&ACTIVE<=9)) ACTIVE=1;
+  let ICONS = loadJSON(ICON_KEY, {T:'',P:'',Z:''});
+  let SNAPS = loadJSON(SNAP_KEY, {});
+  applyOverlayStyle(); updateRaceOverlays(); updateRaceIcons();
+
+  function parseRoster(str){
+    if(!str) return [];
+    return str.split(/[\/,\n]/).map(s=>s.trim()).filter(Boolean).map(s=>{
+      const m = s.match(/^(.*?)[\s]*[\(\[]?\s*([TPZ])\s*[\)\]]?$/i);
+      if(m){ return {name:m[1].trim(), race:m[2].toUpperCase()}; }
+      return {name:s, race:''};
+    });
+  }
+  function raceOf(list,name,def){ const r = list.find(p=>p.name===name)?.race; return r||def; }
+  function applyPlayer(side,name,roster){
+    if(!name) return;
+    const race = raceOf(roster,name, side===1?'T':'P');
+    if(side===1){ $('t1').textContent=name; $('race1').dataset.race=race; }
+    else { $('t2').textContent=name; $('race2').dataset.race=race; }
+    applyRaceColors(); updateRaceOverlays(); updateRaceIcons();
+  }
+
+  /* Panel */
+  const gear=$('gear');
+  function openPanel(){
+    if(document.querySelector('.panel')) return;
+    const p=document.createElement('div'); p.className='panel';
+    p.innerHTML = `
+      <h3>Overlay Controls <button class="xbtn" id="btn_close_top" type="button" title="닫기">✕</button></h3>
+      <div class="row"><label>타이틀</label><input id="i_series" placeholder="Bo5"></div>
+      <div class="row"><label>Series Glow</label><select id="i_seriesGlow"><option value="soft">Soft</option><option value="medium">Medium</option><option value="strong" selected>Strong</option><option value="neon">Neon</option></select></div>
+
+      <div class="row"><label>좌/우 색</label><div class="seg"><input type="color" id="i_c1" value="#e35a5a"><input type="color" id="i_c2" value="#3bd6ff"></div></div>
+      <div class="row"><label>Style</label><select id="i_style"><option value="sc1">sc1</option><option value="clear">clear</option><option value="glass">glass</option><option value="solid">solid</option></select></div>
+      <div class="row"><label>Width</label><input id="i_w" placeholder="880 or 50vw"></div>
+      <div class="row"><label>Top</label><input id="i_y" placeholder="20 or 4vh"></div>
+
+      <h3>로스터 빠른 추가</h3>
+      <div class="row"><label>우리팀 추가</label><div class="seg seg-toggle" id="seg_home"><input id="add_h_name" placeholder="이름" style="min-width:160px"><div class="tog"><button class="chip" data-race="T" type="button">T</button><button class="chip" data-race="P" type="button">P</button><button class="chip" data-race="Z" type="button">Z</button></div><button class="btn" id="add_h_btn" type="button">추가</button></div></div>
+      <div class="row"><label>상대팀 추가</label><div class="seg seg-toggle" id="seg_away"><input id="add_a_name" placeholder="이름" style="min-width:160px"><div class="tog"><button class="chip" data-race="T" type="button">T</button><button class="chip" data-race="P" type="button">P</button><button class="chip" data-race="Z" type="button">Z</button></div><button class="btn" id="add_a_btn" type="button">추가</button></div></div>
+
+      <h3>라인업 (1–9)</h3>
+      <div class="row"><label>활성 슬롯</label><div class="seg"><select id="active_slot"></select><button class="btn" id="apply_active" type="button">적용 → 보드</button><button class="btn" id="next_active" type="button">다음 ▶</button></div></div>
+      <div class="row"><label>SP(좌/우)</label><div class="seg"><button class="miniBtn" data-spl="1">L:1</button><button class="miniBtn" data-spl="5">L:5</button><button class="miniBtn" data-spl="7">L:7</button><button class="miniBtn" data-spl="11">L:11</button><span style="width:12px"></span><button class="miniBtn" data-spr="1">R:1</button><button class="miniBtn" data-spr="5">R:5</button><button class="miniBtn" data-spr="7">R:7</button><button class="miniBtn" data-spr="11">R:11</button></div></div>
+      <div class="row"><label>일괄작업</label><div class="seg"><button class="btn danger" id="bulk_clear_home" type="button">우리팀 전체삭제</button><button class="btn danger" id="bulk_clear_away" type="button">상대팀 전체삭제</button></div></div>
+      <div class="lineup" id="lineup"></div>
+
+      <h3>스코어 / 세트</h3>
+      <div class="row"><label>Score 1</label><div class="seg"><button class="btn" id="dec1">-</button><input id="i_s1" type="number" min="0" style="width:70px"><button class="btn" id="inc1">+</button></div></div>
+      <div class="row"><label>Score 2</label><div class="seg"><button class="btn" id="dec2">-</button><input id="i_s2" type="number" min="0" style="width:70px"><button class="btn" id="inc2">+</button></div></div>
+      <div class="row"><label>SETS (L/R)</label><div class="seg"><input id="i_sets" placeholder="예: LRR12" style="flex:1"><button class="btn" id="addL">L</button><button class="btn" id="addR">R</button><button class="btn" id="back">⌫</button><button class="btn" id="clearSets">Clear</button></div></div>
+
+      <h3>종족 오버레이 (T/P/Z)</h3>
+      <div class="row"><label>T 오버레이</label><div class="seg" style="flex-wrap:nowrap"><input id="ov_t" placeholder="URL" style="min-width:180px"><button class="btn" id="ov_t_pick">파일</button><button class="btn" id="ov_t_clear">Clear</button></div></div>
+      <div class="row"><label>P 오버레이</label><div class="seg" style="flex-wrap:nowrap"><input id="ov_p" placeholder="URL" style="min-width:180px"><button class="btn" id="ov_p_pick">파일</button><button class="btn" id="ov_p_clear">Clear</button></div></div>
+      <div class="row"><label>Z 오버레이</label><div class="seg" style="flex-wrap:nowrap"><input id="ov_z" placeholder="URL" style="min-width:180px"><button class="btn" id="ov_z_pick">파일</button><button class="btn" id="ov_z_clear">Clear</button></div></div>
+      <div class="row"><label>오버레이 투명도</label><input id="ov_opacity" type="range" min="0" max="1" step="0.01" value="0.12"></div>
+      <div class="row"><label>오버레이 모드</label><select id="ov_mode"><option value="color" selected>원본색</option><option value="screen-color">스크린(컬러)</option><option value="screen-mono">스크린(모노)</option></select></div>
+
+      <h3>종족 아이콘 (T/P/Z)</h3>
+      <div class="row"><label>T 아이콘</label><div class="seg" style="flex-wrap:nowrap"><input id="ic_t" placeholder="URL" style="min-width:180px"><button class="btn" id="ic_t_pick">파일</button><button class="btn" id="ic_t_clear">Clear</button></div></div>
+      <div class="row"><label>P 아이콘</label><div class="seg" style="flex-wrap:nowrap"><input id="ic_p" placeholder="URL" style="min-width:180px"><button class="btn" id="ic_p_pick">파일</button><button class="btn" id="ic_p_clear">Clear</button></div></div>
+      <div class="row"><label>Z 아이콘</label><div class="seg" style="flex-wrap:nowrap"><input id="ic_z" placeholder="URL" style="min-width:180px"><button class="btn" id="ic_z_pick">파일</button><button class="btn" id="ic_z_clear">Clear</button></div></div>
+
+      <h3>팀 로고 (좌/우)</h3>
+      <div class="row"><label>좌 로고</label><div class="seg" style="flex-wrap:nowrap"><input id="i_l1" placeholder="URL" style="min-width:180px"><button class="btn" id="pick_l1">파일</button><button class="btn" id="clear_l1">Clear</button></div></div>
+      <div class="row"><label>우 로고</label><div class="seg" style="flex-wrap:nowrap"><input id="i_l2" placeholder="URL" style="min-width:180px"><button class="btn" id="pick_l2">파일</button><button class="btn" id="clear_l2">Clear</button></div></div>
+
+      <h3>스냅샷</h3>
+      <div class="row"><label>베이스버전</label><div class="seg"><button class="btn" id="snap_save_base" type="button">저장</button><button class="btn" id="snap_load_base" type="button">불러오기</button></div></div>
+      <div class="row"><label>현재 버전</label><div class="seg"><button class="btn" id="snap_save_curr" type="button">저장</button><button class="btn" id="snap_load_curr" type="button">불러오기</button></div></div>
+      <div class="row"><label>내보내기/가져오기</label><div class="seg"><button class="btn" id="snap_export" type="button">Export JSON</button><input type="file" id="snap_import" accept="application/json" style="display:none"><button class="btn" id="snap_import_btn" type="button">Import JSON</button></div></div>
+
+      <div class="row"><label></label><div class="seg"><button class="btn primary" id="btn_copy" type="button">Copy URL</button><button class="btn" id="btn_copy_view" type="button">Copy VIEW URL</button><button class="btn" id="btn_close" type="button">Close</button></div></div>
+    `;
+    document.body.appendChild(p);
+
+    // Prefill
+    const byId=id=>document.getElementById(id), val=(k,d='')=>qs.get(k)||d;
+    byId('i_series').value = val('series', $('series').textContent||'Bo5');
+    byId('i_seriesGlow').value = sg;
+    byId('i_c1').value = getComputedStyle(board).getPropertyValue('--c1').trim()||'#e35a5a';
+    byId('i_c2').value = getComputedStyle(board).getPropertyValue('--c2').trim()||'#3bd6ff';
+    byId('i_style').value = style; byId('i_w').value=w||''; byId('i_y').value=y||'';
+
+    // Overlay prefill
+    const setIf=(id,v)=>{ const el=byId(id); if(el) el.value = (v!=null? String(v):''); };
+    setIf('ov_t', OVERLAYS.T||'');
+    setIf('ov_p', OVERLAYS.P||'');
+    setIf('ov_z', OVERLAYS.Z||'');
+    setIf('ov_opacity', (typeof OVERLAYS.opacity==='number'?OVERLAYS.opacity:0.12));
+    if(byId('ov_mode')) byId('ov_mode').value = OVERLAYS.mode || 'color';
+    applyOverlayStyle();
+    updateRaceOverlays();
+
+    // Race icon prefill
+    setIf('ic_t', ICONS.T||'');
+    setIf('ic_p', ICONS.P||'');
+    setIf('ic_z', ICONS.Z||'');
+    updateRaceIcons();
+
+    // Roster (from localStorage only) — quick-add toggles
+    let addHomeRace='T', addAwayRace='T';
+    const segHome = p.querySelector('#seg_home');
+    const segAway = p.querySelector('#seg_away');
+    function wireRaceSeg(container, initial, onChange){
+      let current=initial; const chips=[...container.querySelectorAll('.chip')];
+      function setActive(v){ current=v; chips.forEach(c=>c.classList.toggle('active', c.dataset.race===v)); onChange(current); }
+      chips.forEach(c=>c.addEventListener('click',()=> setActive(c.dataset.race)));
+      setActive(initial);
+    }
+    wireRaceSeg(segHome, addHomeRace, v=>addHomeRace=v);
+    wireRaceSeg(segAway, addAwayRace, v=>addAwayRace=v);
+
+    function addPlayer(side,name,race){
+      name=(name||'').trim(); race=((race||'T').toUpperCase().charAt(0)||'T'); if(!name) return;
+      let list = side==='home'? RHOME : RAWAY; const key = side==='home'? RHOME_KEY : RAWAY_KEY;
+      if(list.some(p=>p.name===name)) return; // avoid duplicates
+      list.push({name, race}); saveJSON(key, list);
+      renderLineup();
+    }
+    p.querySelector('#add_h_btn').onclick=()=>{ addPlayer('home', p.querySelector('#add_h_name').value, addHomeRace); p.querySelector('#add_h_name').value=''; };
+    p.querySelector('#add_a_btn').onclick=()=>{ addPlayer('away', p.querySelector('#add_a_name').value, addAwayRace); p.querySelector('#add_a_name').value=''; };
+    p.querySelector('#add_h_name').addEventListener('keydown', e=>{ if(e.key==='Enter'){ p.querySelector('#add_h_btn').click(); }});
+    p.querySelector('#add_a_name').addEventListener('keydown', e=>{ if(e.key==='Enter'){ p.querySelector('#add_a_btn').click(); }});
+
+    // Active select
+    const actSel=byId('active_slot'); actSel.innerHTML = Array.from({length:9},(_,i)=>`<option value="${i+1}">${i+1}</option>`).join(''); actSel.value=String(ACTIVE);
+
+    function updateSpButtonsUI(){ const idx=(parseInt(actSel.value,10)||ACTIVE)-1; const pair=LINEUP[idx]||{spL:'',spR:''}; p.querySelectorAll('[data-spl]').forEach(btn=>btn.classList.toggle('active', btn.getAttribute('data-spl')===String(pair.spL))); p.querySelectorAll('[data-spr]').forEach(btn=>btn.classList.toggle('active', btn.getAttribute('data-spr')===String(pair.spR))); }
+    actSel.addEventListener('change', updateSpButtonsUI);
+    document.addEventListener('slotApplied', updateSpButtonsUI);
+
+    // Build lineup table
+    function optionHTML(list){ return '<option value="">-</option>'+list.map(p=>`<option value="${encodeURIComponent(p.name)}">${p.name}${p.race?` (${p.race})`:''}</option>`).join(''); }
+    function rebuildRowOptions(row){ row.querySelector('.lu-h').innerHTML = optionHTML(RHOME); row.querySelector('.lu-a').innerHTML = optionHTML(RAWAY); }
+    function setSelectByName(sel,name){ sel.value = name? encodeURIComponent(name):''; }
+    function saveLineup(){ saveJSON(LINEUP_KEY, LINEUP); }
+
+    function renderLineup(){
+      const box=byId('lineup'); box.innerHTML='';
+      for(let i=0;i<9;i++){
+        if(!LINEUP[i]) LINEUP[i] = {h:'',a:'',spL:'',spR:''};
+        const row=document.createElement('div'); row.className='lu-row'; row.dataset.slot=String(i+1);
+        row.innerHTML = `
+          <span class="sl">${i+1}</span>
+          <select class="lu-h"></select>
+          <span class="vs-mini">vs</span>
+          <select class="lu-a"></select>
+          <button class="miniBtn" data-apply="${i+1}" type="button">적용</button>
+          <button class="miniBtn" data-clear="${i+1}" type="button">지움</button>`;
+        box.appendChild(row);
+        rebuildRowOptions(row);
+        setSelectByName(row.querySelector('.lu-h'), LINEUP[i].h);
+        setSelectByName(row.querySelector('.lu-a'), LINEUP[i].a);
+        row.querySelector('.lu-h').addEventListener('change', (e)=>{ LINEUP[i].h = decodeURIComponent(e.target.value||''); saveLineup(); });
+        row.querySelector('.lu-a').addEventListener('change', (e)=>{ LINEUP[i].a = decodeURIComponent(e.target.value||''); saveLineup(); });
+        row.querySelector('[data-apply]').addEventListener('click',()=>applySlot(i+1));
+        row.querySelector('[data-clear]').addEventListener('click',()=>{ LINEUP[i] = {h:'',a:'',spL:LINEUP[i].spL||'', spR:LINEUP[i].spR||''}; saveLineup(); renderLineup(); });
+      }
+    }
+
+    function updateSpBoard(pair){ const spL=pair?.spL||''; const spR=pair?.spR||''; currentSP.l=spL; currentSP.r=spR; renderRaceWithSp(spL, spR); }
+
+    function applySlot(n){ const idx=n-1; const pair=LINEUP[idx]||{h:'',a:'',spL:'',spR:''}; if(pair.h) applyPlayer(1, pair.h, RHOME); if(pair.a) applyPlayer(2, pair.a, RAWAY); ACTIVE=n; localStorage.setItem(ACTIVE_KEY,String(ACTIVE)); actSel.value=String(ACTIVE); updateSpBoard(pair); document.dispatchEvent(new CustomEvent('slotApplied',{detail:{slot:n}})); queueSync
+
+    function clearBoardSide(side){
+      if(side===1){ $('t1').textContent=''; $('race1').dataset.race='T'; }
+      else { $('t2').textContent=''; $('race2').dataset.race='P'; }
+      renderRaceWithSp(currentSP.l, currentSP.r);
+    }
+
+    // Initial render
+    renderLineup();
+    updateSpButtonsUI();
+
+    // Bulk clear lineup sides
+    const bch = document.getElementById('bulk_clear_home');
+    const bca = document.getElementById('bulk_clear_away');
+    if(bch) bch.onclick=()=>{ if(confirm('라인업의 우리팀을 모두 비울까요?')){ LINEUP = LINEUP.map(x=>({ ...x, h:'' })); saveLineup(); renderLineup(); clearBoardSide(1); } };
+    if(bca) bca.onclick=()=>{ if(confirm('라인업의 상대팀을 모두 비울까요?')){ LINEUP = LINEUP.map(x=>({ ...x, a:'' })); saveLineup(); renderLineup(); clearBoardSide(2); } };
+
+    // SP buttons for active slot
+    p.addEventListener('click',(e)=>{
+      const t=e.target.closest('[data-spl],[data-spr]'); if(!t) return;
+      const idx=(parseInt(actSel.value,10)||ACTIVE)-1; const pair=LINEUP[idx]||{h:'',a:'',spL:'',spR:''};
+      if(t.hasAttribute('data-spl')){
+        const v=t.getAttribute('data-spl');
+        pair.spL = (String(pair.spL)===String(v)) ? '' : v; // ⬅ 토글(같은 값 누르면 해제)
+      } else if(t.hasAttribute('data-spr')){
+        const v=t.getAttribute('data-spr');
+        pair.spR = (String(pair.spR)===String(v)) ? '' : v; // ⬅ 토글(같은 값 누르면 해제)
+      }
+      LINEUP[idx]=pair; saveLineup(); updateSpBoard(pair); updateSpButtonsUI(); queueSync();
+    });
+    byId('i_s1').addEventListener('input',e=>{ const v=String(Math.max(0,parseInt(e.target.value||'0',10)||0)); $('s1').textContent=v; });
+    byId('i_s2').addEventListener('input',e=>{ const v=String(Math.max(0,parseInt(e.target.value||'0',10)||0)); $('s2').textContent=v; });
+    byId('dec1').onclick=()=>{ const i=byId('i_s1'); i.value=Math.max(0,(+i.value||0)-1); i.dispatchEvent(new Event('input')); };
+    byId('inc1').onclick=()=>{ const i=byId('i_s1'); i.value=(+i.value||0)+1; i.dispatchEvent(new Event('input')); };
+    byId('dec2').onclick=()=>{ const i=byId('i_s2'); i.value=Math.max(0,(+i.value||0)-1); i.dispatchEvent(new Event('input')); };
+    byId('inc2').onclick=()=>{ const i=byId('i_s2'); i.value=(+i.value||0)+1; i.dispatchEvent(new Event('input')); };
+
+    byId('i_sets').addEventListener('input',e=>{ const v=e.target.value.toUpperCase().replace(/[^LR12]/g,''); e.target.value=v; renderDualSets(v); });
+    byId('addL').onclick=()=>{ const i=byId('i_sets'); i.value=(i.value||'')+'L'; i.dispatchEvent(new Event('input')); };
+    byId('addR').onclick=()=>{ const i=byId('i_sets'); i.value=(i.value||'')+'R'; i.dispatchEvent(new Event('input')); };
+    byId('back').onclick=()=>{ const i=byId('i_sets'); i.value=(i.value||'').slice(0,-1); i.dispatchEvent(new Event('input')); };
+    byId('clearSets').onclick=()=>{ const i=byId('i_sets'); i.value=''; i.dispatchEvent(new Event('input')); };
+
+    // Series & style binds
+    byId('i_series').addEventListener('input',e=>{ $('series').textContent=e.target.value||'Bo5'; });
+    byId('i_seriesGlow').addEventListener('change',e=>{ const el=$('series'); el.classList.remove('series-glow--soft','series-glow--medium','series-glow--strong','series-glow--neon'); el.classList.add('series-glow--'+e.target.value); });
+    byId('i_c1').addEventListener('input',e=>{ board.style.setProperty('--c1', e.target.value); });
+    byId('i_c2').addEventListener('input',e=>{ board.style.setProperty('--c2', e.target.value); });
+    byId('i_style').addEventListener('change',e=>{ applyStyle(e.target.value); });
+    byId('i_w').addEventListener('input',e=>{ board.style.minWidth='unset';board.style.maxWidth='unset';board.style.width=/vw|%|px$/.test(e.target.value)?e.target.value:`${e.target.value}px`; });
+    byId('i_y').addEventListener('input',e=>{ wrap.style.top=/vh|%|px$/.test(e.target.value)?e.target.value:`${e.target.value}px`; });
+
+    // Logos url + local file
+    const setLogo=(box,img,url)=>{ if(url){ box.classList.remove('hide'); img.src=url; } else { box.classList.add('hide'); img.removeAttribute('src'); } };
+    byId('i_l1').addEventListener('input',e=>{ setLogo($('logo1'), $('logo1Img'), e.target.value.trim()); });
+    byId('i_l2').addEventListener('input',e=>{ setLogo($('logo2'), $('logo2Img'), e.target.value.trim()); });
+    const pick=(cb)=>{ const f=document.createElement('input'); f.type='file'; f.accept='image/*'; f.style.display='none'; document.body.appendChild(f); f.onchange=(e)=>{ const file=e.target.files&&e.target.files[0]; if(file&&file.type.startsWith('image/')){ cb(URL.createObjectURL(file)); } document.body.removeChild(f); }; f.click(); };
+    byId('pick_l1').onclick=()=>pick(url=>setLogo($('logo1'), $('logo1Img'), url));
+    byId('pick_l2').onclick=()=>pick(url=>setLogo($('logo2'), $('logo2Img'), url));
+    byId('clear_l1').onclick=()=>{ byId('i_l1').value=''; setLogo($('logo1'), $('logo1Img'), ''); };
+    byId('clear_l2').onclick=()=>{ byId('i_l2').value=''; setLogo($('logo2'), $('logo2Img'), ''); };
+
+    // === Race overlay bindings ===
+    const setOverlay=(race,url)=>{ OVERLAYS[race]=url; saveJSON(OV_KEY, OVERLAYS); updateRaceOverlays(); };
+    ['t','p','z'].forEach(k=>{
+      const up = (race,val)=>setOverlay(race,val.trim());
+      const R = k.toUpperCase();
+      const inputEl = byId('ov_'+k); if(inputEl) inputEl.addEventListener('input',e=>up(R,e.target.value));
+      const pickBtn = byId('ov_'+k+'_pick'); if(pickBtn) pickBtn.onclick=()=> pick(url=> setOverlay(R, url));
+      const clrBtn = byId('ov_'+k+'_clear'); if(clrBtn) clrBtn.onclick=()=> setOverlay(R,'');
+    });
+    const opa = byId('ov_opacity'); if(opa) opa.addEventListener('input', e=>{ const v=parseFloat(e.target.value); OVERLAYS.opacity = isNaN(v)?0.12:v; saveJSON(OV_KEY, OVERLAYS); updateRaceOverlays(); });
+
+    const ovm = byId('ov_mode'); if(ovm) ovm.addEventListener('change', e=>{ OVERLAYS.mode = e.target.value; saveJSON(OV_KEY, OVERLAYS); applyOverlayStyle(); });
+
+    // === Race icon bindings ===
+    const setIcon=(race,url)=>{ ICONS[race]=url; saveJSON(ICON_KEY, ICONS); updateRaceIcons(); };
+    ['t','p','z'].forEach(k=>{
+      const up = (race,val)=>setIcon(race,(val||'').trim());
+      const R = k.toUpperCase();
+      const inputEl = byId('ic_'+k); if(inputEl) inputEl.addEventListener('input',e=>up(R,e.target.value));
+      const pickBtn = byId('ic_'+k+'_pick'); if(pickBtn) pickBtn.onclick=()=> pick(url=> setIcon(R, url));
+      const clrBtn = byId('ic_'+k+'_clear'); if(clrBtn) clrBtn.onclick=()=> setIcon(R,'');
+    });
+
+    // === Snapshots ===
+    function getGlow(){ const el=$('series'); const m=[...el.classList].find(c=>c.startsWith('series-glow--')); return m?m.replace('series-glow--',''):'strong'; }
+    function captureState(){
+      const s={};
+      s.RHOME=RHOME; s.RAWAY=RAWAY; s.LINEUP=LINEUP; s.ACTIVE=ACTIVE;
+      s.OVERLAYS=OVERLAYS; s.ICONS=ICONS;
+      s.series=$('series').textContent||'Bo5'; s.sg=getGlow();
+      s.style=document.getElementById('i_style')?document.getElementById('i_style').value:'sc1';
+      s.c1=getComputedStyle(board).getPropertyValue('--c1').trim(); s.c2=getComputedStyle(board).getPropertyValue('--c2').trim();
+      s.s1=$('s1').textContent||'0'; s.s2=$('s2').textContent||'0';
+      s.sets=document.getElementById('i_sets')?document.getElementById('i_sets').value:'';
+      s.l1=document.getElementById('i_l1')?document.getElementById('i_l1').value:''; s.l2=document.getElementById('i_l2')?document.getElementById('i_l2').value:'';
+      s.w=document.getElementById('i_w')?document.getElementById('i_w').value:''; s.y=document.getElementById('i_y')?document.getElementById('i_y').value:'';
+      return s;
+    }
+    function applyState(s){ if(!s) return;
+      RHOME = s.RHOME||[]; RAWAY = s.RAWAY||[]; LINEUP = s.LINEUP||Array.from({length:9},()=>({h:'',a:'',spL:'',spR:''})); ACTIVE = s.ACTIVE||1; saveJSON(RHOME_KEY,RHOME); saveJSON(RAWAY_KEY,RAWAY); saveJSON(LINEUP_KEY,LINEUP); localStorage.setItem(ACTIVE_KEY,String(ACTIVE));
+      OVERLAYS = s.OVERLAYS||{T:'',P:'',Z:'',opacity:0.12,mode:'color'}; ICONS = s.ICONS||{T:'',P:'',Z:''}; saveJSON(OV_KEY,OVERLAYS); saveJSON(ICON_KEY,ICONS);
+      $('series').textContent = s.series||'Bo5'; const el=$('series'); el.classList.remove('series-glow--soft','series-glow--medium','series-glow--strong','series-glow--neon'); el.classList.add('series-glow--'+(s.sg||'strong'));
+      applyStyle(s.style||'sc1'); board.style.setProperty('--c1', s.c1||'#e35a5a'); board.style.setProperty('--c2', s.c2||'#3bd6ff');
+      $('s1').textContent = s.s1||'0'; $('s2').textContent = s.s2||'0';
+      if(document.getElementById('i_s1')) document.getElementById('i_s1').value = s.s1||'0'; if(document.getElementById('i_s2')) document.getElementById('i_s2').value = s.s2||'0';
+      if(document.getElementById('i_sets')){ document.getElementById('i_sets').value = s.sets||''; document.getElementById('i_sets').dispatchEvent(new Event('input')); }
+      if(document.getElementById('i_l1')){ document.getElementById('i_l1').value = s.l1||''; document.getElementById('i_l1').dispatchEvent(new Event('input')); }
+      if(document.getElementById('i_l2')){ document.getElementById('i_l2').value = s.l2||''; document.getElementById('i_l2').dispatchEvent(new Event('input')); }
+      if(document.getElementById('i_w')&&s.w){ document.getElementById('i_w').value=s.w; document.getElementById('i_w').dispatchEvent(new Event('input')); }
+      if(document.getElementById('i_y')&&s.y){ document.getElementById('i_y').value=s.y; document.getElementById('i_y').dispatchEvent(new Event('input')); }
+      renderLineup(); const act=document.getElementById('active_slot'); if(act){ act.value=String(ACTIVE); act.dispatchEvent(new Event('change')); }
+      const pair=LINEUP[ACTIVE-1]||{spL:'',spR:''}; updateSpBoard(pair);
+      applyOverlayStyle(); updateRaceOverlays(); updateRaceIcons();
+    }
+    document.getElementById('snap_save_base').onclick=()=>{ SNAPS.base=captureState(); saveJSON(SNAP_KEY,SNAPS); alert('베이스버전 저장 완료'); };
+    document.getElementById('snap_load_base').onclick=()=>{ if(SNAPS.base){ applyState(SNAPS.base); alert('베이스버전 불러오기 완료'); } else alert('저장된 베이스버전이 없습니다'); };
+    document.getElementById('snap_save_curr').onclick=()=>{ SNAPS.current=captureState(); saveJSON(SNAP_KEY,SNAPS); alert('현재 버전 저장 완료'); };
